@@ -101,6 +101,7 @@ namespace Loom.Unity3d.Samples.TilesChainEvm
 
             var callerAddr = Address.FromPublicKey(this.publicKey);
             EvmContract evmContract = new EvmContract(this.client, contractAddr, callerAddr, abi);
+
             evmContract.ChainEventReceived += ChainEventReceivedHandler;
             return evmContract;
         }
@@ -110,7 +111,7 @@ namespace Loom.Unity3d.Samples.TilesChainEvm
             if (e.EventName != "OnTileMapStateUpdate")
                 return;
 
-            OnTileMapStateUpdateEvent onTileMapStateUpdateEvent = e.DecodeEvent<OnTileMapStateUpdateEvent>();
+            OnTileMapStateUpdateEvent onTileMapStateUpdateEvent = e.DecodeEventDTO<OnTileMapStateUpdateEvent>();
             JsonTileMapState jsonTileMapState = JsonUtility.FromJson<JsonTileMapState>(onTileMapStateUpdateEvent.State);
 
             this.eventActions.Enqueue(() =>
