@@ -2,7 +2,7 @@
 using System.Collections.Generic;
 using UnityEngine;
 
-namespace Loom.Unity3d.Samples.TilesChain2 {
+namespace Loom.Unity3d.Samples.TilesChainEvm {
     [Serializable]
     public class JsonTileMapState {
         public List<Tile> tiles = new List<Tile>();

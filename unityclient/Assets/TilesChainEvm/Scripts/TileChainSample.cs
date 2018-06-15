@@ -1,20 +1,24 @@
-﻿using System.Collections.Generic;
+﻿using System;
+using System.Collections.Generic;
+using System.Threading.Tasks;
 using UnityEngine;
+using UnityEngine.UI;
 using Random = UnityEngine.Random;
 
-namespace Loom.Unity3d.Samples.TilesChain2 {
-    public class TileChainPortSample : MonoBehaviour {
+namespace Loom.Unity3d.Samples.TilesChainEvm {
+    public class TileChainSample : MonoBehaviour {
         public Sprite PointSprite;
         public Sprite SquareSprite;
         public Vector2 GameFieldSize = new Vector2(640, 480);
+        public Text StatusText;
+        public Button ReconnectButton;
 
-        private TileChainContractClient _client;
-        private JsonTileMapState _jsonTileMapState = new JsonTileMapState();
-        private List<GameObject> _tileGameObjects = new List<GameObject>();
-        private Color32 _color;
+        private readonly List<GameObject> tileGameObjects = new List<GameObject>();
+        private TileChainContractClient client;
+        private JsonTileMapState jsonTileMapState = new JsonTileMapState();
+        private Color32 color;
 
-        // Use this for initialization
-        async void Start() {
+        private async void Start() {
             Camera.main.orthographicSize = GameFieldSize.y / 2f;
             Camera.main.transform.position = new Vector3(GameFieldSize.x / 2f, GameFieldSize.y / 2f, Camera.main.transform.position.z);
 
@@ -27,26 +31,22 @@ namespace Loom.Unity3d.Samples.TilesChain2 {
             gameFieldGo.transform.position = GameFieldSize * 0.5f;
 
             // Pick nice random color for this player
-            _color = Random.ColorHSV(0, 1, 1, 1, 1, 1);
+            this.color = Random.ColorHSV(0, 1, 1, 1, 1, 1);
 
             // The private key is used to sign transactions sent to the DAppChain.
             // Usually you'd generate one private key per player, or let them provide their own.
             // In this sample we just generate a new key every time.
             var privateKey = CryptoUtils.GeneratePrivateKey();
             var publicKey = CryptoUtils.PublicKeyFromPrivateKey(privateKey);
-            _client = new TileChainContractClient(privateKey, publicKey, Debug.unityLogger);
-            _client.TileMapStateUpdated += ClientOnTileMapStateUpdated;
-            JsonTileMapState jsonTileMapState = await _client.GetTileMapState();
-            UpdateTileMap(jsonTileMapState);
-        }
+            this.client = new TileChainContractClient(privateKey, publicKey, Debug.unityLogger);
+            this.client.TileMapStateUpdated += ClientOnTileMapStateUpdated;
 
-        private void ClientOnTileMapStateUpdated(JsonTileMapState obj) {
-            UpdateTileMap(obj);
+            await ConnectClient();
         }
 
         private void Update() {
-            _client.Update();
-            if (Input.GetMouseButtonDown(0)) {
+            this.client.Update();
+            if (Input.GetMouseButtonDown(0) && this.client.IsConnected) {
                 Ray screenPointToRay = Camera.main.ScreenPointToRay(Input.mousePosition);
                 Vector2 dotPosition = screenPointToRay.origin;
 
@@ -56,37 +56,66 @@ namespace Loom.Unity3d.Samples.TilesChain2 {
 
                 JsonTileMapState.Tile tile = new JsonTileMapState.Tile {
                     color = new JsonTileMapState.Tile.Color {
-                        r = _color.r,
-                        g = _color.g,
-                        b = _color.b,
+                        r = this.color.r,
+                        g = this.color.g,
+                        b = this.color.b,
                     },
                     point = new Vector2Int((int) dotPosition.x, (int) GameFieldSize.y - (int) dotPosition.y)
                 };
-                _jsonTileMapState.tiles.Add(tile);
+                this.jsonTileMapState.tiles.Add(tile);
 #pragma warning disable 4014
-                _client.SetTileMapState(_jsonTileMapState);
+                this.client.SetTileMapState(this.jsonTileMapState);
 #pragma warning restore 4014
             }
         }
 
-        private void UpdateTileMap(JsonTileMapState jsonTileMapState) {
-            _jsonTileMapState = jsonTileMapState ?? new JsonTileMapState();
+        private async Task ConnectClient()
+        {
+            ReconnectButton.gameObject.SetActive(false);
+            StatusText.gameObject.SetActive(true);
+            StatusText.text = "Connecting...";
+            try
+            {
+                await this.client.ConnectToContract();
+                JsonTileMapState jsonTileMapState = await this.client.GetTileMapState();
+                UpdateTileMap(jsonTileMapState);
 
-            foreach (GameObject tile in _tileGameObjects) {
+                StatusText.gameObject.SetActive(false);
+            } catch (Exception e)
+            {
+                StatusText.text = "Error: " + e.Message;
+                ReconnectButton.gameObject.SetActive(true);
+                Debug.LogException(e);
+            }
+        }
+
+        private void ClientOnTileMapStateUpdated(JsonTileMapState obj) {
+            UpdateTileMap(obj);
+        }
+
+        private void UpdateTileMap(JsonTileMapState jsonTileMapState) {
+            this.jsonTileMapState = jsonTileMapState ?? new JsonTileMapState();
+
+            foreach (GameObject tile in this.tileGameObjects) {
                 Destroy(tile);
             }
 
-            _tileGameObjects.Clear();
-            foreach (JsonTileMapState.Tile tile in _jsonTileMapState.tiles) {
+            this.tileGameObjects.Clear();
+            foreach (JsonTileMapState.Tile tile in this.jsonTileMapState.tiles) {
                 GameObject go = new GameObject("Tile");
                 go.transform.localScale = Vector3.one * 16f;
-                go.transform.position = new Vector3(tile.point.x, 480 - tile.point.y, 0);
+                go.transform.position = new Vector3(tile.point.x, GameFieldSize.y - tile.point.y, 0);
                 SpriteRenderer spriteRenderer = go.AddComponent<SpriteRenderer>();
                 spriteRenderer.sprite = PointSprite;
                 spriteRenderer.color = new Color32((byte) tile.color.r, (byte) tile.color.g, (byte) tile.color.b, 255);
 
-                _tileGameObjects.Add(go);
+                this.tileGameObjects.Add(go);
             }
+        }
+
+        public async void ReconnectButtonHandler()
+        {
+            await ConnectClient();
         }
     }
 }

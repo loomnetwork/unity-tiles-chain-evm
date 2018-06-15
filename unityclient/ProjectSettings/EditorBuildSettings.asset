@@ -4,4 +4,7 @@
 EditorBuildSettings:
   m_ObjectHideFlags: 0
   serializedVersion: 2
-  m_Scenes: []
+  m_Scenes:
+  - enabled: 1
+    path: Assets/TilesChainEvm/Scenes/LoomTilesChainEvm.unity
+    guid: 6f6d008d0ebd8bf4586c7dc3622357dc

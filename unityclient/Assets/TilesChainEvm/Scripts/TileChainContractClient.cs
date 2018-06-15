@@ -1,124 +1,142 @@
 ﻿using System;
-using System.Collections;
 using System.Collections.Generic;
-using System.Text;
 using System.Threading.Tasks;
-using Google.Protobuf;
-using Loom.Unity3d;
-using Loom.Nethereum.ABI.Decoders;
 using Loom.Nethereum.ABI.FunctionEncoding;
 using Loom.Nethereum.ABI.FunctionEncoding.Attributes;
 using Loom.Nethereum.ABI.Model;
-using Loom.Nethereum.Contracts;
-using Loom.Nethereum.RPC.Eth.DTOs;
-using Newtonsoft.Json;
-using Newtonsoft.Json.Linq;
 using UnityEngine;
 
-namespace Loom.Unity3d.Samples.TilesChain2 {
-    public class TileChainContractClient {
-        private readonly byte[] _privateKey;
-        private readonly byte[] _publicKey;
-        private readonly ILogger _logger;
-        private EvmContract _contract;
-        private Queue<Action> _eventActions = new Queue<Action>();
+namespace Loom.Unity3d.Samples.TilesChainEvm
+{
+    /// <summary>
+    /// Abstracts interaction with the contract.
+    /// </summary>
+    public class TileChainContractClient
+    {
+        private readonly byte[] privateKey;
+        private readonly byte[] publicKey;
+        private readonly ILogger logger;
+        private readonly Queue<Action> eventActions = new Queue<Action>();
+        private EvmContract contract;
+        private DAppChainClient client;
+        private IRPCClient reader;
+        private IRPCClient writer;
 
         public event Action<JsonTileMapState> TileMapStateUpdated;
 
-        public TileChainContractClient(byte[] privateKey, byte[] publicKey, ILogger logger) {
-            _privateKey = privateKey;
-            _publicKey = publicKey;
-            _logger = logger;
+        public TileChainContractClient(byte[] privateKey, byte[] publicKey, ILogger logger)
+        {
+            this.privateKey = privateKey;
+            this.publicKey = publicKey;
+            this.logger = logger;
         }
 
-        public void Update() {
-            while (_eventActions.Count > 0) {
-                Action action = _eventActions.Dequeue();
+        public bool IsConnected => this.reader.IsConnected;
+
+        public async Task ConnectToContract()
+        {
+            if (this.contract == null)
+            {
+                this.contract = await GetContract();
+            }
+        }
+
+        public async Task<JsonTileMapState> GetTileMapState()
+        {
+            await ConnectToContract();
+
+            TileMapStateOutput result = await this.contract.StaticCallDTOTypeOutputAsync<TileMapStateOutput>("GetTileMapState");
+            if (result == null)
+                throw new Exception("Smart contract didn't return anything!");
+
+            JsonTileMapState jsonTileMapState = JsonUtility.FromJson<JsonTileMapState>(result.State);
+            return jsonTileMapState;
+        }
+
+        public async Task SetTileMapState(JsonTileMapState jsonTileMapState)
+        {
+            await ConnectToContract();
+
+            string tileMapState = JsonUtility.ToJson(jsonTileMapState);
+            await this.contract.CallAsync("SetTileMapState", tileMapState);
+        }
+
+        public void Update()
+        {
+            while (this.eventActions.Count > 0)
+            {
+                Action action = this.eventActions.Dequeue();
                 action();
             }
         }
 
-        private async Task<EvmContract> GetContract(byte[] privateKey, byte[] publicKey) {
-            var writer = RPCClientFactory.Configure()
+        private async Task<EvmContract> GetContract()
+        {
+            this.writer = RPCClientFactory.Configure()
                 .WithLogger(Debug.unityLogger)
                 .WithWebSocket("ws://127.0.0.1:46657/websocket")
                 .Create();
 
-            var reader = RPCClientFactory.Configure()
+            this.reader = RPCClientFactory.Configure()
                 .WithLogger(Debug.unityLogger)
                 .WithWebSocket("ws://127.0.0.1:9999/queryws")
                 .Create();
 
-            var client = new DAppChainClient(writer, reader)
-                { Logger = _logger };
+            this.client = new DAppChainClient(this.writer, this.reader)
+                { Logger = this.logger };
 
             // required middleware
-            client.TxMiddleware = new TxMiddleware(new ITxMiddlewareHandler[] {
-                new NonceTxMiddleware {
-                    PublicKey = publicKey,
-                    Client = client
+            this.client.TxMiddleware = new TxMiddleware(new ITxMiddlewareHandler[]
+            {
+                new NonceTxMiddleware
+                {
+                    PublicKey = this.publicKey,
+                    Client = this.client
                 },
-                new SignedTxMiddleware(privateKey)
+                new SignedTxMiddleware(this.privateKey)
             });
 
             const string abi = "[{\"constant\":false,\"inputs\":[{\"name\":\"_tileState\",\"type\":\"string\"}],\"name\":\"SetTileMapState\",\"outputs\":[],\"payable\":false,\"stateMutability\":\"nonpayable\",\"type\":\"function\"},{\"constant\":true,\"inputs\":[],\"name\":\"GetTileMapState\",\"outputs\":[{\"name\":\"\",\"type\":\"string\"}],\"payable\":false,\"stateMutability\":\"view\",\"type\":\"function\"},{\"anonymous\":false,\"inputs\":[{\"indexed\":false,\"name\":\"state\",\"type\":\"string\"}],\"name\":\"OnTileMapStateUpdate\",\"type\":\"event\"}]\r\n";
+            var contractAddr = await this.client.ResolveContractAddressAsync("TilesChain");
 
-            var contractAddr = await client.ResolveContractAddressAsync("TilesChain");
-            var callerAddr = Address.FromPublicKey(publicKey);
-            EvmContract evmContract = new EvmContract(client, contractAddr, callerAddr, abi);
-            evmContract.OnEvent += ClientOnOnChainEvent;
+            var callerAddr = Address.FromPublicKey(this.publicKey);
+            EvmContract evmContract = new EvmContract(this.client, contractAddr, callerAddr, abi);
+            evmContract.ChainEventReceived += ChainEventReceivedHandler;
             return evmContract;
         }
 
-        private void ClientOnOnChainEvent(object sender, DAppChainClient.ChainEventArgs e) {
-            // TODO: Need to check the event name to know how to decode it.
-            // Currently there is no way, so just assume the needed event
-            ParameterDecoder parameterDecoder = new ParameterDecoder();
-            List<ParameterOutput> decodedData =
-                parameterDecoder.DecodeDefaultData(CryptoUtils.BytesToHexString(e.Data), new Parameter("string", "state"));
+        private void ChainEventReceivedHandler(object sender, EvmChainEventArgs e)
+        {
+            if (e.EventName != "OnTileMapStateUpdate")
+                return;
 
-            JsonTileMapState jsonTileMapState = JsonUtility.FromJson<JsonTileMapState>((string) decodedData[0].Result);
-            _eventActions.Enqueue(() => {
+            OnTileMapStateUpdateEvent onTileMapStateUpdateEvent = e.DecodeEvent<OnTileMapStateUpdateEvent>();
+            JsonTileMapState jsonTileMapState = JsonUtility.FromJson<JsonTileMapState>(onTileMapStateUpdateEvent.State);
+
+            this.eventActions.Enqueue(() =>
+            {
                 TileMapStateUpdated?.Invoke(jsonTileMapState);
             });
-        }
-
-        public async Task<JsonTileMapState> GetTileMapState() {
-            if (_contract == null) {
-                _contract = await GetContract(_privateKey, _publicKey);
-            }
-
-            TileMapStateOutput result = await _contract.StaticCallDTOTypeOutputAsync<TileMapStateOutput>("GetTileMapState");
-            if (result != null) {
-                JsonTileMapState jsonTileMapState = JsonUtility.FromJson<JsonTileMapState>(result.State);
-                return jsonTileMapState;
-            } else {
-                throw new Exception("Smart contract didn't return anything!");
-            }
-        }
-
-        public async Task SetTileMapState(JsonTileMapState jsonTileMapState) {
-            if (_contract == null) {
-                _contract = await GetContract(_privateKey, _publicKey);
-            }
-
-            TileMapState tileMapStateTx = new TileMapState();
-            tileMapStateTx.Data = JsonUtility.ToJson(jsonTileMapState);
-            await _contract.CallAsync("SetTileMapState", tileMapStateTx.Data);
         }
 
         [FunctionOutput]
         public class TileMapStateOutput
         {
             [Parameter("string", "state", 1)]
-            public string State {get; set;}
+            public string State { get; set; }
         }
 
         [Function("GetTileMapState", "string")]
         public class TileMapStateFunction
         {
             [Parameter("string", "state", 1)]
-            public string State {get; set;}
+            public string State { get; set; }
+        }
+
+        public class OnTileMapStateUpdateEvent
+        {
+            [Parameter("string", "state", 1)]
+            public string State { get; set; }
         }
     }
 }
