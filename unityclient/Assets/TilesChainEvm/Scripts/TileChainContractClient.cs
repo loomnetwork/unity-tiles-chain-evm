@@ -102,11 +102,11 @@ namespace Loom.Unity3d.Samples.TilesChainEvm
             var callerAddr = Address.FromPublicKey(this.publicKey);
             EvmContract evmContract = new EvmContract(this.client, contractAddr, callerAddr, abi);
 
-            evmContract.ChainEventReceived += ChainEventReceivedHandler;
+            evmContract.EventReceived += this.EventReceivedHandler;
             return evmContract;
         }
 
-        private void ChainEventReceivedHandler(object sender, EvmChainEventArgs e)
+        private void EventReceivedHandler(object sender, EvmChainEventArgs e)
         {
             if (e.EventName != "OnTileMapStateUpdate")
                 return;
