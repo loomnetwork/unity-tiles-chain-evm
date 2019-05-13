@@ -1,3 +1,8 @@
+
+# Deprecated Repository
+
+This repository is **deprecated and no longer maintained**. We suggest you head over to the [Loom Network SDK for Unity](https://github.com/loomnetwork/unity-sdk) repository. It contains the SDK code and a Unity 2017.4 project that provides examples.
+
 # Unity Tiles Chain EVM  Sample
 
 A basic example showcasing a simple Unity game interacting with an EVM-based Loom DappChain, using [Loom Unity SDK](https://github.com/loomnetwork/unity3d-sdk).
