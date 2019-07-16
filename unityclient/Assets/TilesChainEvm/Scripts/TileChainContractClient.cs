@@ -1,6 +1,7 @@
 ﻿using System;
 using System.Collections.Generic;
 using System.Threading.Tasks;
+using Loom.Client;
 using Loom.Nethereum.ABI.FunctionEncoding;
 using Loom.Nethereum.ABI.FunctionEncoding.Attributes;
 using Loom.Nethereum.ABI.Model;
@@ -19,8 +20,8 @@ namespace Loom.Unity3d.Samples.TilesChainEvm
         private readonly Queue<Action> eventActions = new Queue<Action>();
         private EvmContract contract;
         private DAppChainClient client;
-        private IRPCClient reader;
-        private IRPCClient writer;
+        private IRpcClient reader;
+        private IRpcClient writer;
 
         public event Action<JsonTileMapState> TileMapStateUpdated;
 
@@ -31,7 +32,10 @@ namespace Loom.Unity3d.Samples.TilesChainEvm
             this.logger = logger;
         }
 
-        public bool IsConnected => this.reader.IsConnected;
+        public bool IsConnected =>
+            this.contract != null &&
+            this.contract.Client.ReadClient.ConnectionState == RpcConnectionState.Connected &&
+            this.contract.Client.WriteClient.ConnectionState == RpcConnectionState.Connected;
 
         public async Task ConnectToContract()
         {
@@ -45,7 +49,7 @@ namespace Loom.Unity3d.Samples.TilesChainEvm
         {
             await ConnectToContract();
 
-            TileMapStateOutput result = await this.contract.StaticCallDTOTypeOutputAsync<TileMapStateOutput>("GetTileMapState");
+            TileMapStateOutput result = await this.contract.StaticCallDtoTypeOutputAsync<TileMapStateOutput>("GetTileMapState");
             if (result == null)
                 throw new Exception("Smart contract didn't return anything!");
 
@@ -72,14 +76,14 @@ namespace Loom.Unity3d.Samples.TilesChainEvm
 
         private async Task<EvmContract> GetContract()
         {
-            this.writer = RPCClientFactory.Configure()
+            this.writer = RpcClientFactory.Configure()
                 .WithLogger(Debug.unityLogger)
-                .WithWebSocket("ws://127.0.0.1:46657/websocket")
+                .WithWebSocket("ws://127.0.0.1:46658/websocket")
                 .Create();
 
-            this.reader = RPCClientFactory.Configure()
+            this.reader = RpcClientFactory.Configure()
                 .WithLogger(Debug.unityLogger)
-                .WithWebSocket("ws://127.0.0.1:9999/queryws")
+                .WithWebSocket("ws://127.0.0.1:46658/queryws")
                 .Create();
 
             this.client = new DAppChainClient(this.writer, this.reader)
@@ -88,11 +92,7 @@ namespace Loom.Unity3d.Samples.TilesChainEvm
             // required middleware
             this.client.TxMiddleware = new TxMiddleware(new ITxMiddlewareHandler[]
             {
-                new NonceTxMiddleware
-                {
-                    PublicKey = this.publicKey,
-                    Client = this.client
-                },
+                new NonceTxMiddleware(this.publicKey, this.client),
                 new SignedTxMiddleware(this.privateKey)
             });
 
@@ -103,6 +103,7 @@ namespace Loom.Unity3d.Samples.TilesChainEvm
             EvmContract evmContract = new EvmContract(this.client, contractAddr, callerAddr, abi);
 
             evmContract.EventReceived += this.EventReceivedHandler;
+            await evmContract.Client.SubscribeToAllEvents();
             return evmContract;
         }
 
@@ -111,7 +112,7 @@ namespace Loom.Unity3d.Samples.TilesChainEvm
             if (e.EventName != "OnTileMapStateUpdate")
                 return;
 
-            OnTileMapStateUpdateEvent onTileMapStateUpdateEvent = e.DecodeEventDTO<OnTileMapStateUpdateEvent>();
+            OnTileMapStateUpdateEvent onTileMapStateUpdateEvent = e.DecodeEventDto<OnTileMapStateUpdateEvent>();
             JsonTileMapState jsonTileMapState = JsonUtility.FromJson<JsonTileMapState>(onTileMapStateUpdateEvent.State);
 
             this.eventActions.Enqueue(() =>

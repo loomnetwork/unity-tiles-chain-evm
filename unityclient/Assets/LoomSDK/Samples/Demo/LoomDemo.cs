@@ -1,10 +1,9 @@
 ﻿using UnityEngine;
 using UnityEngine.UI;
-using Loom.Unity3d;
-using Loom.Unity3d.Samples;
+using Loom.Client;
+using Loom.Client.Samples;
 using System;
-using System.Threading.Tasks;
-using Newtonsoft.Json;
+using Loom.Newtonsoft.Json;
 
 public class LoomDemo : MonoBehaviour
 {
@@ -43,18 +42,18 @@ public class LoomDemo : MonoBehaviour
         var privateKey = CryptoUtils.GeneratePrivateKey();
         var publicKey = CryptoUtils.PublicKeyFromPrivateKey(privateKey);
         var callerAddr = Address.FromPublicKey(publicKey);
-        this.statusTextRef.text = "Signed in as " + callerAddr.ToAddressString();
+        this.statusTextRef.text = "Signed in as " + callerAddr.QualifiedAddress;
 
-        var writer = RPCClientFactory.Configure()
+        var writer = RpcClientFactory.Configure()
             .WithLogger(Debug.unityLogger)
             //.WithHTTP("http://127.0.0.1:46658/rpc")
-            .WithWebSocket("ws://127.0.0.1:46657/websocket")
+            .WithWebSocket("ws://127.0.0.1:46658/websocket")
             .Create();
 
-        var reader = RPCClientFactory.Configure()
+        var reader = RpcClientFactory.Configure()
             .WithLogger(Debug.unityLogger)
             //.WithHTTP("http://127.0.0.1:46658/query")
-            .WithWebSocket("ws://127.0.0.1:9999/queryws")
+            .WithWebSocket("ws://127.0.0.1:46658/queryws")
             .Create();
 
         var client = new DAppChainClient(writer, reader)
@@ -63,10 +62,7 @@ public class LoomDemo : MonoBehaviour
         };
 
         client.TxMiddleware = new TxMiddleware(new ITxMiddlewareHandler[]{
-            new NonceTxMiddleware{
-                PublicKey = publicKey,
-                Client = client
-            },
+            new NonceTxMiddleware(publicKey, client),
             new SignedTxMiddleware(privateKey)
         });
 
@@ -84,6 +80,7 @@ public class LoomDemo : MonoBehaviour
         */
 
         // Subscribe to DAppChainClient.ChainEventReceived to receive events from a specific smart contract
+        await this.contract.Client.SubscribeToAllEvents();
         this.contract.EventReceived += (sender, e) =>
         {
             var jsonStr = System.Text.Encoding.UTF8.GetString(e.Data);

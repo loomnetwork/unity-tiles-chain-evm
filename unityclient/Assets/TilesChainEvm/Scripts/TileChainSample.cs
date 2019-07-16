@@ -1,6 +1,7 @@
 ﻿using System;
 using System.Collections.Generic;
 using System.Threading.Tasks;
+using Loom.Client;
 using UnityEngine;
 using UnityEngine.UI;
 using Random = UnityEngine.Random;
