@@ -40,3 +40,10 @@ sysinfo.txt
 Assets/Plugins/AsyncAwaitUtil/Documentation.meta
 Assets/Plugins/AsyncAwaitUtil/Documentation/*
 /packages/*
+
+# Project
+Assets/Plugins/
+Assets/Plugins.meta
+
+Assets/TilesChainEvm/Resources/
+Assets/TilesChainEvm/Resources.meta
