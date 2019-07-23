@@ -2,9 +2,7 @@
 using System.Collections.Generic;
 using System.Threading.Tasks;
 using Loom.Client;
-using Loom.Nethereum.ABI.FunctionEncoding;
 using Loom.Nethereum.ABI.FunctionEncoding.Attributes;
-using Loom.Nethereum.ABI.Model;
 using UnityEngine;
 
 namespace Loom.Unity3d.Samples.TilesChainEvm
@@ -16,6 +14,7 @@ namespace Loom.Unity3d.Samples.TilesChainEvm
     {
         private readonly byte[] privateKey;
         private readonly byte[] publicKey;
+        private readonly Address contractAddress;
         private readonly ILogger logger;
         private readonly Queue<Action> eventActions = new Queue<Action>();
         private EvmContract contract;
@@ -25,10 +24,11 @@ namespace Loom.Unity3d.Samples.TilesChainEvm
 
         public event Action<JsonTileMapState> TileMapStateUpdated;
 
-        public TileChainContractClient(byte[] privateKey, byte[] publicKey, ILogger logger)
+        public TileChainContractClient(byte[] privateKey, byte[] publicKey, Address address, ILogger logger)
         {
             this.privateKey = privateKey;
             this.publicKey = publicKey;
+            this.contractAddress = address;
             this.logger = logger;
         }
 
@@ -96,11 +96,11 @@ namespace Loom.Unity3d.Samples.TilesChainEvm
                 new SignedTxMiddleware(this.privateKey)
             });
 
-            const string abi = "[{\"constant\":false,\"inputs\":[{\"name\":\"_tileState\",\"type\":\"string\"}],\"name\":\"SetTileMapState\",\"outputs\":[],\"payable\":false,\"stateMutability\":\"nonpayable\",\"type\":\"function\"},{\"constant\":true,\"inputs\":[],\"name\":\"GetTileMapState\",\"outputs\":[{\"name\":\"\",\"type\":\"string\"}],\"payable\":false,\"stateMutability\":\"view\",\"type\":\"function\"},{\"anonymous\":false,\"inputs\":[{\"indexed\":false,\"name\":\"state\",\"type\":\"string\"}],\"name\":\"OnTileMapStateUpdate\",\"type\":\"event\"}]\r\n";
-            var contractAddr = await this.client.ResolveContractAddressAsync("TilesChain");
+            await this.client.ReadClient.ConnectAsync();
+            await this.client.WriteClient.ConnectAsync();
 
             var callerAddr = Address.FromPublicKey(this.publicKey);
-            EvmContract evmContract = new EvmContract(this.client, contractAddr, callerAddr, abi);
+            EvmContract evmContract = new EvmContract(this.client, this.contractAddress, callerAddr, GetAbi());
 
             evmContract.EventReceived += this.EventReceivedHandler;
             await evmContract.Client.SubscribeToAllEvents();
@@ -119,6 +119,15 @@ namespace Loom.Unity3d.Samples.TilesChainEvm
             {
                 TileMapStateUpdated?.Invoke(jsonTileMapState);
             });
+        }
+
+        public static string GetAbi()
+        {
+            TextAsset textAsset = Resources.Load<TextAsset>("TilesChain.abi");
+            if (textAsset == null)
+                return null;
+
+            return textAsset.text;
         }
 
         [FunctionOutput]

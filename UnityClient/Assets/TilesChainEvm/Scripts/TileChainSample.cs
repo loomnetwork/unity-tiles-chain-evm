@@ -13,6 +13,7 @@ namespace Loom.Unity3d.Samples.TilesChainEvm {
         public Vector2 GameFieldSize = new Vector2(640, 480);
         public Text StatusText;
         public Button ReconnectButton;
+        public string ContractAddressHex;
 
         private readonly List<GameObject> tileGameObjects = new List<GameObject>();
         private TileChainContractClient client;
@@ -20,6 +21,26 @@ namespace Loom.Unity3d.Samples.TilesChainEvm {
         private Color32 color;
 
         private async void Start() {
+            if (TileChainContractClient.GetAbi() == null)
+            {
+                this.StatusText.text = "Error: no ABI file found, please run 'truffle build' first";
+                ReconnectButton.gameObject.SetActive(false);
+                return;
+            }
+
+            Address contractAddress;
+            try
+            {
+                contractAddress = Address.FromString(this.ContractAddressHex);
+            }
+            catch (Exception e)
+            {
+                this.StatusText.text = "Error: Please set the address of your deployed contract in ContractAddressHex field of Controller GameObject";
+                Debug.LogWarning(e);
+                ReconnectButton.gameObject.SetActive(false);
+                return;
+            }
+
             Camera.main.orthographicSize = GameFieldSize.y / 2f;
             Camera.main.transform.position = new Vector3(GameFieldSize.x / 2f, GameFieldSize.y / 2f, Camera.main.transform.position.z);
 
@@ -39,13 +60,19 @@ namespace Loom.Unity3d.Samples.TilesChainEvm {
             // In this sample we just generate a new key every time.
             var privateKey = CryptoUtils.GeneratePrivateKey();
             var publicKey = CryptoUtils.PublicKeyFromPrivateKey(privateKey);
-            this.client = new TileChainContractClient(privateKey, publicKey, Debug.unityLogger);
+            this.client = new TileChainContractClient(privateKey, publicKey, contractAddress, Debug.unityLogger);
             this.client.TileMapStateUpdated += ClientOnTileMapStateUpdated;
 
             await ConnectClient();
         }
 
-        private void Update() {
+        private void Update()
+        {
+            if (this.client == null)
+            {
+                return;
+            }
+
             this.client.Update();
             if (Input.GetMouseButtonDown(0) && this.client.IsConnected) {
                 Ray screenPointToRay = Camera.main.ScreenPointToRay(Input.mousePosition);

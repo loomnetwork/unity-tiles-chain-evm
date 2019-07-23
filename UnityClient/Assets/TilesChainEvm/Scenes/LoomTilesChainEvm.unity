@@ -481,6 +481,7 @@ MonoBehaviour:
   GameFieldSize: {x: 640, y: 480}
   StatusText: {fileID: 1508173971}
   ReconnectButton: {fileID: 304114625}
+  ContractAddressHex: 
 --- !u!4 &781511437
 Transform:
   m_ObjectHideFlags: 0
