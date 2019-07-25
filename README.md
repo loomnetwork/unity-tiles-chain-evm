@@ -58,7 +58,7 @@ npm run deploy
 After deployment, take note of the address of the deployed contract.
 
 ## 5. Build the Unity client
-1. Open the Unity project located in `unityclient`.
+1. Open the Unity project located in `UnityClient`.
 2. Open the `LoomTilesChainEvm` scene.
 3. Select the `Controller` object and copy the deployed contract address into the `ContractAddressHex` field.
 4. Run the scene to check if everything works, and build the project.
