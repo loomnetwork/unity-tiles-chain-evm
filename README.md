@@ -17,7 +17,7 @@ Development
 
 ## 1. Run your own DappChain
 
-Please consult the [Loom SDK docs](https://loomx.io/developers/docs/en/prereqs.html) for further instruction on running your own DappChain.
+Please consult the [Loom SDK docs](https://loomx.io/developers/en/basic-install-all.html) for further instructions on running your own DappChain.
 
 ## 2. Download the example project (Tiles Chain EVM)
 
