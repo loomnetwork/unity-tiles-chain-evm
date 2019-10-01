@@ -39,6 +39,8 @@ cd DAppChain
 
 ## 4. Build and Deploy with Truffle
 
+> Before running the following steps, make sure that Node.js v10 (recommended v10.15.3) is installed on your computer. To check out if Node.js is installed on your computer, fire up a terminal, and enter `node -v`.
+
 Open another console.
 
 ```bash
@@ -58,6 +60,7 @@ npm run deploy
 After deployment, take note of the address of the deployed contract.
 
 ## 5. Build the Unity client
+
 1. Open the Unity project located in `UnityClient`.
 2. Open the `LoomTilesChainEvm` scene.
 3. Select the `Controller` object and copy the deployed contract address into the `ContractAddressHex` field.
